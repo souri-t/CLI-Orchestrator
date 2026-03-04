@@ -1,0 +1,64 @@
+# ============================================================
+# AI コーディングエージェント用サンドボックスイメージ
+#
+# このイメージ内で GitHub Copilot CLI (copilot) が実行される。
+# - 非 root ユーザー (agent, uid=1000) で動作
+# - GITHUB_TOKEN は渡さない (git push 不可)
+# - Copilot 認証はホスト側ディレクトリのマウントで提供
+# ============================================================
+FROM ubuntu:22.04
+
+# 非インタラクティブモード
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 基本ツールのインストール
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    wget \
+    jq \
+    ca-certificates \
+    gnupg \
+    build-essential \
+    python3 \
+    python3-pip \
+    python3-venv \
+    iptables \
+    iproute2 \
+    dnsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20.x のインストール (copilot CLI の実行に必要)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# GitHub Copilot CLI のインストール
+# https://github.com/github/copilot-cli
+RUN npm install -g @github/copilot-cli 2>/dev/null || \
+    curl -fsSL https://github.com/github/copilot-cli/releases/latest/download/copilot-linux-x64 \
+    -o /usr/local/bin/copilot && chmod +x /usr/local/bin/copilot
+
+# 非 root ユーザーを作成
+RUN useradd -m -u 1000 -s /bin/bash agent && \
+    mkdir -p /home/agent/.copilot /home/agent/.config/github-copilot && \
+    chown -R agent:agent /home/agent
+
+# git の設定
+RUN git config --global user.email "ai-agent@orchestrator" && \
+    git config --global user.name "AI Orchestrator Agent" && \
+    git config --global init.defaultBranch main && \
+    git config --global safe.directory /workspace
+
+# 作業ディレクトリ
+RUN mkdir -p /workspace && chown agent:agent /workspace
+
+WORKDIR /workspace
+USER agent
+
+# git のグローバル設定を agent ユーザーで設定
+RUN git config --global user.email "ai-agent@orchestrator" && \
+    git config --global user.name "AI Orchestrator Agent" && \
+    git config --global safe.directory /workspace
+
+CMD ["sleep", "infinity"]

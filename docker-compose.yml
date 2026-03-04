@@ -1,0 +1,43 @@
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator
+    restart: unless-stopped
+
+    volumes:
+      # ホストの Docker デーモンを操作するためのソケット (サンドボックス起動に必要)
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Copilot 認証ファイル (読み取り専用マウント)
+      - ${HOME}/.copilot:/root/.copilot:ro
+      - ${HOME}/.config/github-copilot:/root/.config/github-copilot:ro
+
+      # 設定ファイル
+      - ./config.yaml:/app/config.yaml:ro
+
+      # サンドボックスの作業ディレクトリ (ホストと共有)
+      - /tmp/orchestrator-work:/tmp/orchestrator-work
+
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - CONFIG_FILE=/app/config.yaml
+
+    # webhook モードの場合はポートを開放 (polling モードでは不要)
+    ports:
+      - "${WEBHOOK_PORT:-8080}:8080"
+
+    # ヘルスチェック (webhook モードのみ有効)
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

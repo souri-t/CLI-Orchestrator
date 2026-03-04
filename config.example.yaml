@@ -1,0 +1,61 @@
+# ============================================================
+# Orchestrator 設定ファイルのサンプル
+# コピーして config.yaml にリネームして使用してください
+# ============================================================
+
+# 監視対象リポジトリ (owner/repo 形式)
+repositories:
+  - "your-org/your-repo"
+  # - "your-org/another-repo"
+
+# 動作モード: "polling" または "webhook"
+mode: "polling"
+
+# 最大並行タスク数 (同時に処理する Issue の最大数)
+max_concurrent_tasks: 2
+
+# ラベル設定
+labels:
+  trigger: "ai-task"      # このラベルが付いた Issue を処理対象とする
+  wip: "ai-wip"           # 処理中
+  done: "ai-done"         # 完了
+  fail: "ai-fail"         # 失敗
+  pr_generated: "ai-generated"  # 作成した PR に付与するラベル
+
+# Polling モードの設定
+polling:
+  interval_sec: 300  # 5分ごとにポーリング (最小: 30秒)
+
+# Webhook モードの設定
+webhook:
+  host: "0.0.0.0"
+  port: 8080
+  path: "/webhook"
+  # secret は環境変数 WEBHOOK_SECRET で設定してください
+
+# Docker サンドボックスの設定
+sandbox:
+  image: "orchestrator-sandbox:latest"
+  memory_limit: "4g"
+  cpu_count: 2
+  pids_limit: 256
+  timeout_sec: 1800  # 30分
+  work_dir_host: "/tmp/orchestrator-work"
+  # ネットワーク許可ホスト (空リストにするとフル許可 - 開発時のみ推奨)
+  allowed_hosts:
+    - "github.com"
+    - "api.github.com"
+    - "copilot-proxy.githubusercontent.com"
+    - "githubcopilot.com"
+    - "default.exp-tas.com"
+    - "objects.githubusercontent.com"
+
+# GitHub Copilot CLI の設定
+copilot:
+  max_autopilot_continues: 20
+  model: ""  # 空の場合は Copilot のデフォルトモデルを使用
+
+# 認証ファイルのパス (コンテナにマウントされる)
+auth:
+  copilot_dir: "~/.copilot"
+  github_copilot_config_dir: "~/.config/github-copilot"
