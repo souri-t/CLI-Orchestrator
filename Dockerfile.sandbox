@@ -34,10 +34,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # GitHub Copilot CLI のインストール
-# https://github.com/github/copilot-cli
-RUN npm install -g @github/copilot-cli 2>/dev/null || \
-    curl -fsSL https://github.com/github/copilot-cli/releases/latest/download/copilot-linux-x64 \
-    -o /usr/local/bin/copilot && chmod +x /usr/local/bin/copilot
+# 公開 npm レジストリのパッケージ: @github/copilot
+RUN npm install -g @github/copilot
 
 # 非 root ユーザーを作成
 RUN useradd -m -u 1000 -s /bin/bash agent && \
