@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN git config --global user.email "orchestrator@ai-bot" && \
     git config --global user.name "AI Orchestrator"
 
-# Python 依存関係のインストール
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .
-
-# ソースコードをコピー
+# ソースコードと設定をコピー
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY prompts/ ./prompts/
+
+# Python 依存関係のインストール
+RUN pip install --no-cache-dir ".[dev]" 2>/dev/null || pip install --no-cache-dir .
 
 # 作業ディレクトリ
 RUN mkdir -p /tmp/orchestrator-work

@@ -1,4 +1,4 @@
-# Orchestrator
+# CLI Orchestrator
 
 GitHub Issue に `ai-task` ラベルを付けると、GitHub Copilot CLI が Docker サンドボックス内で自動的にコーディングし、Draft PR を作成する自動化 Orchestrator です。
 
