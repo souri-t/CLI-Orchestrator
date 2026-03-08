@@ -74,10 +74,11 @@ class TaskPipeline:
                     commit_message=commit_msg,
                 )
 
-            # 3. Draft PR 作成 (サンドボックスの外で実行)
+            # 3. PR 作成 (サンドボックスの外で実行)
             pr_result = self._pr_manager.create_draft_pr(
                 task=task,
                 branch_name=branch_name,
+                draft=self._config.pr.draft,
             )
 
             # 4. Issue を ai-done にマーク

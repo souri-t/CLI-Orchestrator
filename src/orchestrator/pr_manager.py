@@ -58,14 +58,16 @@ class PRManager:
         branch_name: str,
         base_branch: str = "main",
         change_summary: str = "(AI による自動生成)",
+        draft: bool = True,
     ) -> PRResult:
-        """Draft Pull Request を作成する。
+        """Pull Request を作成する。
 
         Args:
             task: 対象の Issue タスク
             branch_name: PR のソースブランチ
             base_branch: マージ先ブランチ (デフォルト: main)
             change_summary: 変更内容のサマリ
+            draft: True の場合 Draft PR、False の場合通常 PR
 
         Returns:
             PRResult (PR番号, URL, タイトル)
@@ -96,7 +98,7 @@ class PRManager:
                 body=pr_body,
                 head=branch_name,
                 base=base,
-                draft=True,  # 必ず Draft PR として作成
+                draft=draft,
             )
 
             # ai-generated ラベルを付与
@@ -120,11 +122,12 @@ class PRManager:
                 title=pr.title,
             )
             log.info(
-                "draft_pr_created",
+                "pr_created",
                 repo=task.repo_full_name,
                 issue=task.issue_number,
                 pr=pr.number,
                 url=pr.html_url,
+                draft=draft,
             )
             return result
 

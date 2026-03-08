@@ -52,6 +52,11 @@ sandbox:
     - "generativelanguage.googleapis.com"
     - "openrouter.ai"  # OpenRouter 使用時に追加
 
+# PR の設定
+pr:
+  draft: true  # true: Draft PR として作成 (デフォルト), false: 通常の PR として作成
+  # base_branch: "main"  # 省略時はリポジトリのデフォルトブランチを使用
+
 # OpenCode CLI の設定
 opencode:
   model: ""  # 空の場合は .opencode.json のデフォルトモデルを使用

@@ -73,6 +73,13 @@ class OpenCodeConfig(BaseModel):
     model: str = ""  # 空の場合は .opencode.json のデフォルトモデルを使用
 
 
+class PRConfig(BaseModel):
+    """Pull Request の設定。"""
+
+    draft: bool = True  # True: Draft PR, False: 通常 PR
+    base_branch: str = ""  # 空の場合はリポジトリのデフォルトブランチを使用
+
+
 class AuthConfig(BaseModel):
     """認証設定 (将来拡張用に予約。現在未使用)。"""
 
@@ -102,6 +109,7 @@ class AppConfig(BaseModel):
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)
+    pr: PRConfig = Field(default_factory=PRConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
 
 
