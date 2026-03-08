@@ -10,9 +10,10 @@ services:
       # ホストの Docker デーモンを操作するためのソケット (サンドボックス起動に必要)
       - /var/run/docker.sock:/var/run/docker.sock
 
-      # Copilot 認証ファイル (読み取り専用マウント)
-      - ${HOME}/.copilot:/root/.copilot:ro
-      - ${HOME}/.config/github-copilot:/root/.config/github-copilot:ro
+      # OpenCode 設定ディレクトリ (読み取り専用マウント)
+      # ~/.opencode/ にはバイナリ (bin/opencode) とプラグインが含まれる
+      - ${HOME}/.opencode:/root/.opencode:ro
+      - ${HOME}/.config/opencode:/root/.config/opencode:ro
 
       # 設定ファイル
       - ./config.yaml:/app/config.yaml:ro
@@ -24,6 +25,14 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
       - CONFIG_FILE=/app/config.yaml
+      # OpenCode 用 API キー (どちらか使用するものを .env に設定)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_ORG_ID=${OPENAI_ORG_ID:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      # OpenRouter (openrouter/<model> 形式でモデル指定)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
 
     # webhook モードの場合はポートを開放 (polling モードでは不要)
     ports:

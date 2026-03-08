@@ -1,10 +1,11 @@
 # ============================================================
 # AI コーディングエージェント用サンドボックスイメージ
 #
-# このイメージ内で GitHub Copilot CLI (copilot) が実行される。
+# このイメージ内で OpenCode CLI (opencode) が実行される。
 # - 非 root ユーザー (agent, uid=1000) で動作
 # - GITHUB_TOKEN は渡さない (git push 不可)
-# - Copilot 認証はホスト側ディレクトリのマウントで提供
+# - OpenCode はビルド時に Linux バイナリをインストールする
+# - API キーは環境変数を1経コンテナに渡す
 # ============================================================
 FROM ubuntu:22.04
 
@@ -28,18 +29,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20.x のインストール (copilot CLI の実行に必要)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-# GitHub Copilot CLI のインストール
-# 公開 npm レジストリのパッケージ: @github/copilot
-RUN npm install -g @github/copilot
+# OpenCode CLI (Linux バイナリ) をビルド時にインストール
+# インストール先: /root/.opencode/bin/opencode → /usr/local/bin/opencode にコピー (agent ユーザーから参照可能にするため cp を使用)
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path && \
+    cp /root/.opencode/bin/opencode /usr/local/bin/opencode && \
+    chmod 755 /usr/local/bin/opencode
 
 # 非 root ユーザーを作成
 RUN useradd -m -u 1000 -s /bin/bash agent && \
-    mkdir -p /home/agent/.copilot /home/agent/.config/github-copilot && \
+    mkdir -p /home/agent/.opencode /home/agent/.config/opencode && \
     chown -R agent:agent /home/agent
 
 # git の設定

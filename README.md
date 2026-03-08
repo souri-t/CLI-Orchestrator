@@ -188,27 +188,38 @@ mode: "polling"  # または "webhook"
 export GITHUB_TOKEN="ghp_your_personal_access_token"
 ```
 
-`.env` ファイルも使用可能：
+`.env` ファイルも使用可能（推奨）：
 
 ```env
+# GitHub Personal Access Token（必須）
 GITHUB_TOKEN=ghp_your_personal_access_token
-WEBHOOK_SECRET=your_webhook_secret  # webhook モードのみ
+
+# Webhook モード使用時のみ
+WEBHOOK_SECRET=your_webhook_secret
+
+# AI API キー — 利用するプロバイダのいずれか1つ以上を設定
+ANTHROPIC_API_KEY=sk-ant-api03-...
+# OPENAI_API_KEY=sk-...
+# GOOGLE_API_KEY=AIza...
+# OPENROUTER_API_KEY=sk-or-...   ← OpenRouter 経由で各プロバイダのモデルを利用可
 ```
 
-### 4. 起動
+> **Note**: `docker compose up` は `.env` ファイルを自動で読み込みます。
 
-**Docker Compose で起動（推奨）:**
+### 4. イメージをビルドして起動
 
 ```bash
-GITHUB_TOKEN=ghp_xxx docker compose up -d
+# イメージをビルド（初回 or コード変更後は必須）
+docker compose build
+
+# 起動前に API キーを確認
+docker compose run --rm orchestrator check-keys
+
+# バックグラウンドで起動
+docker compose up -d
 ```
 
-**直接実行（開発時）:**
-
-```bash
-pip install -e .
-orchestrator run
-```
+> **Note**: `main.py` などのコードを変更した場合は `docker compose build` を再実行してください。`up -d` だけでは新しいコードが反映されません。
 
 ## 使い方
 
@@ -233,16 +244,57 @@ Orchestrator が検出すると：
 
 失敗した場合は `ai-fail` ラベルと、エラー内容のコメントが投稿されます。`ai-task` ラベルを再付与すると再処理されます。
 
+### AI API キーを確認する
+
+起動前に `.env` の API キーが有効かどうかを確認できます。
+
+```bash
+docker compose run --rm orchestrator check-keys
+```
+
+出力例（正常）:
+```
+=== AI API キー ヘルスチェック ===
+
+✅ Anthropic    (ANTHROPIC_API_KEY): OK
+❌ OpenAI       (OPENAI_API_KEY): 未設定
+❌ Google       (GOOGLE_API_KEY): 未設定
+❌ OpenRouter   (OPENROUTER_API_KEY): 未設定
+
+✅ 少なくとも1つのプロバイダのキーが有効です。
+```
+
+出力例（失敗）:
+```
+=== AI API キー ヘルスチェック ===
+
+❌ Anthropic    (ANTHROPIC_API_KEY): 未設定
+❌ OpenAI       (OPENAI_API_KEY): 未設定
+❌ Google       (GOOGLE_API_KEY): 未設定
+❌ OpenRouter   (OPENROUTER_API_KEY): 未設定
+
+❌ 有効な API キーがありません。.env にキーを設定してください。
+```
+
+有効なキーが1つもない場合は exit code 1 で終了するため、CI や起動スクリプトにも組み込めます。
+
+```bash
+# 起動前チェックとして使う例
+docker compose run --rm orchestrator check-keys && docker compose up -d
+```
+
 ### ステータス確認
 
 ```bash
-orchestrator status
+docker compose run --rm orchestrator status
 ```
+
+GitHub API 接続、リポジトリアクセス権、AI API キーの状態をまとめて確認できます。
 
 ### 1回だけ実行（デバッグ用）
 
 ```bash
-orchestrator run-once
+docker compose run --rm orchestrator run-once
 ```
 
 ## 設定リファレンス

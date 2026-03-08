@@ -103,7 +103,7 @@ class TestAgentRunner:
                 return (0, "Cloning...")
             if "git checkout" in cmd_str:
                 return (0, "")
-            if "copilot" in cmd_str:
+            if "opencode" in cmd_str:
                 return (0, "Done!")
             if "git add" in cmd_str:
                 return (0, "")
@@ -115,3 +115,4 @@ class TestAgentRunner:
 
         with pytest.raises(AgentError, match="変更を加えませんでした"):
             runner.run(mock_sandbox, task, "https://github.com/owner/repo.git")
+

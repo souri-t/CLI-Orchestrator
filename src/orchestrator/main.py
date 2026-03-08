@@ -4,12 +4,15 @@
     orchestrator run            # ポーリング or webhook を設定に従って起動
     orchestrator run-once       # 1回だけポーリングして終了 (デバッグ用)
     orchestrator status         # 設定と GitHub 接続を確認
+    orchestrator check-keys     # AI API キーの有効性を検証
 """
 from __future__ import annotations
 
+import os
 import signal
 import sys
 import time
+from typing import NamedTuple
 
 import click
 from github import Auth, Github, GithubException
@@ -19,6 +22,108 @@ from orchestrator.logger import get_logger, setup_logging
 from orchestrator.trigger import Orchestrator
 
 log = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# API キーヘルスチェック
+# ---------------------------------------------------------------------------
+
+class _KeyResult(NamedTuple):
+    provider: str
+    env_var: str
+    ok: bool
+    message: str
+
+
+def _check_api_keys() -> list[_KeyResult]:
+    """環境変数に設定された AI API キーを実際にリクエストして検証する。"""
+    import httpx
+
+    results: list[_KeyResult] = []
+
+    # --- Anthropic ---
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    if anthropic_key:
+        try:
+            r = httpx.get(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                timeout=10.0,
+            )
+            if r.status_code == 200:
+                results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", True, "OK"))
+            elif r.status_code == 401:
+                results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", False, "認証失敗 (無効なキー)"))
+            else:
+                results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", False, f"HTTP {r.status_code}"))
+        except Exception as e:
+            results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", False, f"接続エラー: {e}"))
+    else:
+        results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", False, "未設定"))
+
+    # --- OpenAI ---
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            r = httpx.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                timeout=10.0,
+            )
+            if r.status_code == 200:
+                results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", True, "OK"))
+            elif r.status_code == 401:
+                results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", False, "認証失敗 (無効なキー)"))
+            else:
+                results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", False, f"HTTP {r.status_code}"))
+        except Exception as e:
+            results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", False, f"接続エラー: {e}"))
+    else:
+        results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", False, "未設定"))
+
+    # --- Google ---
+    google_key = os.environ.get("GOOGLE_API_KEY")
+    if google_key:
+        try:
+            r = httpx.get(
+                f"https://generativelanguage.googleapis.com/v1beta/models?key={google_key}",
+                timeout=10.0,
+            )
+            if r.status_code == 200:
+                results.append(_KeyResult("Google", "GOOGLE_API_KEY", True, "OK"))
+            elif r.status_code in (400, 403):
+                results.append(_KeyResult("Google", "GOOGLE_API_KEY", False, "認証失敗 (無効なキー)"))
+            else:
+                results.append(_KeyResult("Google", "GOOGLE_API_KEY", False, f"HTTP {r.status_code}"))
+        except Exception as e:
+            results.append(_KeyResult("Google", "GOOGLE_API_KEY", False, f"接続エラー: {e}"))
+    else:
+        results.append(_KeyResult("Google", "GOOGLE_API_KEY", False, "未設定"))
+
+    # --- OpenRouter ---
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            r = httpx.get(
+                "https://openrouter.ai/api/v1/models",
+                headers={"Authorization": f"Bearer {openrouter_key}"},
+                timeout=10.0,
+            )
+            if r.status_code == 200:
+                results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", True, "OK"))
+            elif r.status_code == 401:
+                results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, "認証失敗 (無効なキー)"))
+            else:
+                results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, f"HTTP {r.status_code}"))
+        except Exception as e:
+            results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, f"接続エラー: {e}"))
+    else:
+        results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, "未設定"))
+
+    return results
 
 
 @click.group()
@@ -56,6 +161,15 @@ def run(ctx: click.Context) -> None:
     if not app_config.repositories:
         click.echo("❌ config.yaml に repositories が設定されていません。", err=True)
         sys.exit(1)
+
+    # AI API キーが一つも設定されていない場合は警告
+    _api_key_vars = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"]
+    if not any(os.environ.get(k) for k in _api_key_vars):
+        click.echo(
+            "⚠️  AI API キーが未設定です。"
+            " .env に ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY のいずれかを設定してください。",
+            err=True,
+        )
 
     log.info(
         "orchestrator_starting",
@@ -98,6 +212,25 @@ def run_once(ctx: click.Context) -> None:
     click.echo("✅ 全タスク完了。")
 
 
+@cli.command("check-keys")
+def check_keys() -> None:
+    """AI API キー（Anthropic / OpenAI / Google）の有効性を実際に検証する。"""
+    click.echo("=== AI API キー ヘルスチェック ===\n")
+    results = _check_api_keys()
+    all_ok = False
+    for r in results:
+        icon = "✅" if r.ok else "❌"
+        click.echo(f"{icon} {r.provider:<12} ({r.env_var}): {r.message}")
+        if r.ok:
+            all_ok = True
+    click.echo()
+    if all_ok:
+        click.echo("✅ 少なくとも1つのプロバイダのキーが有効です。")
+    else:
+        click.echo("❌ 有効な API キーがありません。.env にキーを設定してください。")
+        sys.exit(1)
+
+
 @cli.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
@@ -124,12 +257,12 @@ def status(ctx: click.Context) -> None:
     # 認証ファイルの存在確認
     from pathlib import Path
 
-    copilot_dir = Path(app_config.auth.copilot_dir).expanduser()
-    gh_copilot_dir = Path(app_config.auth.github_copilot_config_dir).expanduser()
-    click.echo(f"\nCopilot Dir  : {copilot_dir} {'✅' if copilot_dir.exists() else '❌ (not found)'}")
-    click.echo(
-        f"GH Copilot   : {gh_copilot_dir} {'✅' if gh_copilot_dir.exists() else '❌ (not found)'}"
-    )
+    opencode_dir = Path(app_config.auth.opencode_dir).expanduser()
+    opencode_config_dir = Path(app_config.auth.opencode_config_dir).expanduser()
+    opencode_dir_status = "✅" if opencode_dir.exists() else "❌ (not found)"
+    opencode_cfg_status = "✅" if opencode_config_dir.exists() else "❌ (not found)"
+    click.echo(f"\nOpenCode Dir : {opencode_dir} {opencode_dir_status}")
+    click.echo(f"OpenCode Cfg : {opencode_config_dir} {opencode_cfg_status}")
 
     # GitHub API 接続テスト
     click.echo("\n--- GitHub API ---")
@@ -150,6 +283,19 @@ def status(ctx: click.Context) -> None:
                 click.echo(f"❌ リポジトリアクセス失敗: {repo_name} ({e.status})")
     except GithubException as e:
         click.echo(f"❌ GitHub API 認証失敗: {e}")
+
+    # AI API キーチェック
+    click.echo("\n--- AI API キー ---")
+    click.echo("(各プロバイダの API エンドポイントに接続して検証します...)")
+    key_results = _check_api_keys()
+    for r in key_results:
+        icon = "✅" if r.ok else ("⚠️ " if r.message == "未設定" else "❌")
+        click.echo(f"  {icon} {r.provider:<12} ({r.env_var}): {r.message}")
+    any_ok = any(r.ok for r in key_results)
+    if any_ok:
+        click.echo("→ 少なくとも1つの AI プロバイダキーが有効です。")
+    else:
+        click.echo("→ ❌ 有効な AI API キーがありません。opencode がタスクを実行できません。")
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Docker サンドボックスのライフサイクル管理モジュール。
 
 サンドボックスコンテナの作成・実行・クリーンアップを管理する。
-- Copilot 認証ファイルを読み取り専用でマウント
+- OpenCode 設定ファイルを読み取り専用でマウント
 - GITHUB_TOKEN はコンテナに渡さない (push はホスト側で実行)
 - ネットワークはホワイトリストで制御
 """
@@ -26,8 +26,6 @@ log = get_logger(__name__)
 
 # コンテナ内の作業ディレクトリ
 CONTAINER_WORKSPACE = "/workspace"
-CONTAINER_COPILOT_DIR = "/home/agent/.copilot"
-CONTAINER_GH_COPILOT_CONFIG = "/home/agent/.config/github-copilot"
 
 
 class SandboxError(Exception):
@@ -58,10 +56,16 @@ class Sandbox:
             (exit_code, output) のタプル
         """
         log.debug("sandbox_exec", container=self.container_id, command=command)
+        # /usr/local/bin にインストールされた Linux 用 opencode バイナリを使用するため
+        # PATH を明示的に設定 (/usr/local/bin を先頭に)
+        base_env = {
+            "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        }
+        merged_env = {**base_env, **(env or {})}
         result = self._container.exec_run(
             command,
             workdir=CONTAINER_WORKSPACE,
-            environment=env or {},
+            environment=merged_env,
             demux=False,
         )
         output = result.output.decode("utf-8", errors="replace") if result.output else ""
@@ -140,17 +144,25 @@ class SandboxManager:
     def _start_container(self, task_id: str) -> Sandbox:
         """コンテナを起動して Sandbox インスタンスを返す。"""
         cfg = self._sandbox_config
-        auth = self._config.auth
 
         # ホスト側の作業ディレクトリを作成
         work_dir = Path(cfg.work_dir_host) / task_id
         work_dir.mkdir(parents=True, exist_ok=True)
 
         # ボリュームマウント設定
-        volumes = self._build_volumes(work_dir, auth)
+        volumes = self._build_volumes(work_dir)
 
         # 環境変数 (GITHUB_TOKEN は渡さない)
         environment: dict[str, str] = {}
+
+        # 同名コンテナが残留している場合は強制削除 (前回の失敗時の残骸)
+        container_name = f"orchestrator-sandbox-{task_id}"
+        try:
+            old = self._client.containers.get(container_name)
+            log.warning("removing_stale_container", name=container_name, id=old.short_id)
+            old.remove(force=True)
+        except docker.errors.NotFound:
+            pass
 
         # リソース制限
         try:
@@ -166,7 +178,7 @@ class SandboxManager:
                 cap_drop=["ALL"],
                 security_opt=["no-new-privileges"],
                 network_mode="bridge",  # iptables でホワイトリスト制御
-                name=f"orchestrator-sandbox-{task_id}",
+                name=container_name,
                 labels={"orchestrator": "sandbox", "task": task_id},
             )
         except docker.errors.ImageNotFound:
@@ -185,30 +197,15 @@ class SandboxManager:
 
         return sandbox
 
-    def _build_volumes(self, work_dir: Path, auth: object) -> dict[str, dict[str, str]]:
-        """ボリュームマウント設定を構築する。"""
-        from orchestrator.config import AuthConfig
+    def _build_volumes(self, work_dir: Path) -> dict[str, dict[str, str]]:
+        """ボリュームマウント設定を構築する。
 
-        auth_config: AuthConfig = auth  # type: ignore[assignment]
+        OpenCode バイナリはビルド時にインストール済みなのでイメージマウントは不要。
+        API キーは exec の環境変数で渡す。
+        """
         volumes: dict[str, dict[str, str]] = {
             str(work_dir): {"bind": CONTAINER_WORKSPACE, "mode": "rw"},
         }
-
-        # Copilot 認証ファイルをマウント (読み取り専用)
-        copilot_dir = Path(auth_config.copilot_dir).expanduser()
-        if copilot_dir.exists():
-            volumes[str(copilot_dir)] = {"bind": CONTAINER_COPILOT_DIR, "mode": "ro"}
-            log.debug("mount_copilot_dir", path=str(copilot_dir))
-        else:
-            log.warning("copilot_dir_not_found", path=str(copilot_dir))
-
-        gh_copilot_dir = Path(auth_config.github_copilot_config_dir).expanduser()
-        if gh_copilot_dir.exists():
-            volumes[str(gh_copilot_dir)] = {"bind": CONTAINER_GH_COPILOT_CONFIG, "mode": "ro"}
-            log.debug("mount_gh_copilot_config", path=str(gh_copilot_dir))
-        else:
-            log.warning("gh_copilot_config_not_found", path=str(gh_copilot_dir))
-
         return volumes
 
     def _apply_network_restrictions(self, sandbox: Sandbox) -> None:

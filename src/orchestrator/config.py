@@ -57,29 +57,27 @@ class SandboxConfig(BaseModel):
         default=[
             "github.com",
             "api.github.com",
-            "copilot-proxy.githubusercontent.com",
-            "githubcopilot.com",
-            "default.exp-tas.com",
             "objects.githubusercontent.com",
+            "api.anthropic.com",
+            "api.openai.com",
+            "api.gemini.com",
+            "generativelanguage.googleapis.com",
+            "openrouter.ai",
         ]
     )
 
 
-class CopilotConfig(BaseModel):
-    """GitHub Copilot CLI の設定。"""
+class OpenCodeConfig(BaseModel):
+    """OpenCode CLI の設定。"""
 
-    max_autopilot_continues: int = Field(default=20, ge=1, le=100)
-    model: str = ""  # 空の場合は copilot のデフォルトを使用
-    # ホスト側の認証ディレクトリ (コンテナにマウントされる)
-    copilot_dir: Path = Path("~/.copilot").expanduser()
-    github_copilot_config_dir: Path = Path("~/.config/github-copilot").expanduser()
+    model: str = ""  # 空の場合は .opencode.json のデフォルトモデルを使用
 
 
 class AuthConfig(BaseModel):
-    """認証設定。"""
+    """認証設定 (将来拡張用に予約。現在未使用)。"""
 
-    copilot_dir: Path = Path("~/.copilot").expanduser()
-    github_copilot_config_dir: Path = Path("~/.config/github-copilot").expanduser()
+    opencode_dir: Path = Path("~/.opencode").expanduser()
+    opencode_config_dir: Path = Path("~/.config/opencode").expanduser()
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +101,7 @@ class AppConfig(BaseModel):
     polling: PollingConfig = Field(default_factory=PollingConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
-    copilot: CopilotConfig = Field(default_factory=CopilotConfig)
+    opencode: OpenCodeConfig = Field(default_factory=OpenCodeConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
 
 

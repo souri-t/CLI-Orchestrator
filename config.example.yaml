@@ -45,17 +45,25 @@ sandbox:
   allowed_hosts:
     - "github.com"
     - "api.github.com"
-    - "copilot-proxy.githubusercontent.com"
-    - "githubcopilot.com"
-    - "default.exp-tas.com"
     - "objects.githubusercontent.com"
+    - "api.anthropic.com"
+    - "api.openai.com"
+    - "api.gemini.com"
+    - "generativelanguage.googleapis.com"
+    - "openrouter.ai"  # OpenRouter 使用時に追加
 
-# GitHub Copilot CLI の設定
-copilot:
-  max_autopilot_continues: 20
-  model: ""  # 空の場合は Copilot のデフォルトモデルを使用
+# OpenCode CLI の設定
+opencode:
+  model: ""  # 空の場合は .opencode.json のデフォルトモデルを使用
+  # モデル指定例:
+  #   Anthropic: "anthropic/claude-sonnet-4-5"
+  #   OpenAI:    "openai/gpt-4o"
+  #   Google:    "google/gemini-2.0-flash"
+  #   OpenRouter: "openrouter/anthropic/claude-sonnet-4-5"
+  #              "openrouter/google/gemini-2.0-flash-001"
+  #              "openrouter/openai/gpt-4o"
 
 # 認証ファイルのパス (コンテナにマウントされる)
 auth:
-  copilot_dir: "~/.copilot"
-  github_copilot_config_dir: "~/.config/github-copilot"
+  opencode_dir: "~/.opencode"
+  opencode_config_dir: "~/.config/opencode"

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "orchestrator"
 version = "0.1.0"
-description = "GitHub Issue → PR 自動化 Orchestrator (GitHub Copilot CLI + Docker Sandbox)"
+description = "GitHub Issue → PR 自動化 Orchestrator (OpenCode + Docker Sandbox)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

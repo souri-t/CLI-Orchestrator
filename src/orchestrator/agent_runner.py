@@ -1,7 +1,7 @@
-"""GitHub Copilot CLI をサンドボックス内で実行するモジュール。
+"""OpenCode CLI をサンドボックス内で実行するモジュール。
 
 Issue の内容からプロンプトを構築し、
-`copilot --autopilot --yolo` コマンドでコーディングを実行する。
+`opencode -p` コマンドでコーディングを実行する。
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class AgentError(Exception):
 
 
 class AgentRunner:
-    """サンドボックス内で Copilot CLI を実行する。"""
+    """サンドボックス内で OpenCode CLI を実行する。"""
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
@@ -33,7 +33,7 @@ class AgentRunner:
 
         1. リポジトリを clone
         2. ブランチを作成
-        3. copilot --autopilot を実行
+        3. opencode -p を実行
         4. git diff を取得して返す
 
         Returns:
@@ -56,8 +56,8 @@ class AgentRunner:
         # 2. ブランチ作成
         self._create_branch(sandbox, branch_name)
 
-        # 3. Copilot CLI 実行
-        self._run_copilot(sandbox, task)
+        # 3. OpenCode CLI 実行
+        self._run_opencode(sandbox, task)
 
         # 4. 変更差分を取得
         diff = self._get_diff(sandbox)
@@ -67,7 +67,7 @@ class AgentRunner:
                 "no_changes",
                 task=f"{task.repo_full_name}#{task.issue_number}",
             )
-            raise AgentError("Copilot CLI がファイルに変更を加えませんでした。")
+            raise AgentError("OpenCode CLI がファイルに変更を加えませんでした。")
 
         log.info(
             "agent_success",
@@ -99,41 +99,69 @@ class AgentRunner:
             raise AgentError(f"ブランチ作成失敗 ({branch_name}):\n{output}")
         log.debug("branch_created", branch=branch_name)
 
-    def _run_copilot(self, sandbox: Sandbox, task: IssueTask) -> None:
-        """copilot CLI を autopilot モードで実行する。"""
-        prompt = self._build_prompt(task)
-        copilot_cfg = self._config.copilot
+    def _run_opencode(self, sandbox: Sandbox, task: IssueTask) -> None:
+        """opencode CLI を非対話モードで実行する。"""
+        import os
 
-        cmd = [
-            "copilot",
-            "--autopilot",
-            "--yolo",
-            "--max-autopilot-continues",
-            str(copilot_cfg.max_autopilot_continues),
-            "-p",
-            prompt,
+        prompt = self._build_prompt(task)
+        opencode_cfg = self._config.opencode
+
+        # `opencode run` が非対話モードの正しいコマンド
+        cmd = ["opencode", "run", prompt]
+        if opencode_cfg.model:
+            cmd += ["--model", opencode_cfg.model]
+
+        # API キーを環境変数から取得してコンテナに渡す
+        api_key_vars = [
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "OPENAI_API_KEY",
+            "OPENAI_ORG_ID",
+            "GOOGLE_API_KEY",
+            "OPENROUTER_API_KEY",
         ]
-        if copilot_cfg.model:
-            cmd += ["--model", copilot_cfg.model]
+        env: dict[str, str] = {}
+        for key in api_key_vars:
+            if val := os.environ.get(key):
+                env[key] = val
+
+        # 全ツールを自動承認 (コンテナはサンドボックス内なので安全)
+        env["OPENCODE_PERMISSION"] = '{"bash":"allow","write":"allow","read":"allow"}'
+        # ターミナル非対話ティップスを無効化
+        env["NO_COLOR"] = "1"
+        env["TERM"] = "dumb"
 
         log.info(
-            "copilot_running",
+            "opencode_running",
             task=f"{task.repo_full_name}#{task.issue_number}",
-            max_continues=copilot_cfg.max_autopilot_continues,
+            model=opencode_cfg.model or "(config default)",
         )
 
-        exit_code, output = sandbox.exec(cmd)
+        exit_code, output = sandbox.exec(cmd, env=env)
 
-        # copilot は exit_code が 0 でなくても部分的に成功している場合がある
-        # git diff で実際の変更を確認するため、ここではログのみ
+        log.info(
+            "opencode_exit",
+            task=f"{task.repo_full_name}#{task.issue_number}",
+            exit_code=exit_code,
+            output_tail=output[-2000:],
+        )
         if exit_code != 0:
-            log.warning(
-                "copilot_nonzero_exit",
-                exit_code=exit_code,
-                output_tail=output[-1000:],
+            raise AgentError(
+                f"OpenCode CLI が exit code {exit_code} で終了しました。\n"
+                f"出力:\n{output[-2000:]}"
             )
-        else:
-            log.debug("copilot_output_tail", output=output[-500:])
+        # exit_code=0 でも出力にエラーを含む場合を検知
+        _error_patterns = [
+            "Error: Model not found",
+            "ProviderModelNotFoundError",
+            "AuthenticationError",
+            "API key",
+        ]
+        for pat in _error_patterns:
+            if pat in output:
+                raise AgentError(
+                    f"OpenCode CLI がエラーで終了しました。\n出力:\n{output[-2000:]}"
+                )
 
     def _get_diff(self, sandbox: Sandbox) -> str:
         """git diff (ステージング含む) を取得する。"""

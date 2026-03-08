@@ -32,7 +32,7 @@ PR_BODY_TEMPLATE = """\
 > ⚠️ **注意**: このPRはAIが生成したコードを含みます。
 > マージ前に必ず内容を確認してください。
 >
-> - 使用モデル: GitHub Copilot (copilot-cli)
+> - 使用エージェント: OpenCode
 > - 生成日時: {generated_at}
 """
 

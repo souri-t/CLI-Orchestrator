@@ -114,6 +114,8 @@ class TaskPipeline:
                 "task_unexpected_error",
                 repo=task.repo_full_name,
                 issue=task.issue_number,
+                exc_type=type(e).__name__,
+                exc_msg=str(e),
             )
             self._issue_monitor.mark_failure(
                 task.repo_full_name,
