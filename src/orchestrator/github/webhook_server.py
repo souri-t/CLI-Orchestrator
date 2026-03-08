@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from orchestrator.issue_monitor import IssueTask
+from orchestrator.github.issue_monitor import IssueTask
 from orchestrator.logger import get_logger
 
 if TYPE_CHECKING:

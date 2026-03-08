@@ -15,13 +15,29 @@ GitHub Issue (`ai-task` ラベル) → Docker サンドボックスで OpenCode 
 ## Architecture
 
 ```
+src/orchestrator/
+├── config.py, logger.py          # 基盤ユーティリティ (全モジュールから参照)
+├── main.py                        # Click CLI エントリーポイント
+├── trigger.py                     # パイプラインコア (TaskPipeline / Orchestrator)
+├── git_ops.py                     # ホスト側 git push
+├── github/                        # GitHub 連携
+│   ├── issue_monitor.py           #   Issue 監視・ラベル遷移
+│   ├── pr_manager.py              #   Draft PR 作成
+│   └── webhook_server.py          #   FastAPI Webhook サーバー
+└── sandbox/                       # Docker サンドボックス
+    ├── sandbox.py                 #   コンテナライフサイクル管理
+    └── agent_runner.py            #   OpenCode CLI 実行
+```
+
+処理フロー:
+```
 GitHub Issue → [Polling/Webhook] → Orchestrator.submit_task()
   → TaskPipeline.process():
-    1. SandboxManager.create() — Docker コンテナ起動
-    2. AgentRunner.run() — clone → checkout -b → opencode run → git diff
-    3. GitOps.push_changes() — ホスト側で git push
-    4. PRManager.create_draft_pr() — Draft PR 作成
-    5. IssueMonitor.mark_success/mark_failure()
+    1. sandbox.SandboxManager.create() — Docker コンテナ起動
+    2. sandbox.AgentRunner.run()       — clone → checkout -b → opencode run → git diff
+    3. GitOps.push_changes()           — ホスト側で git push
+    4. github.PRManager.create_draft_pr()   — Draft PR 作成
+    5. github.IssueMonitor.mark_success/mark_failure()
 ```
 
 - **ラベル駆動ステートマシン**: `ai-task` → `ai-wip` → `ai-done`/`ai-fail` (外部 DB 不要)
@@ -51,8 +67,9 @@ docker compose run --rm orchestrator run-once     # 単発実行
 - **git 操作は `subprocess.run()`**: Docker 共有ボリュームで GitPython の `repo.index.add()` が `PermissionError` を起こすため直接 git CLI を使用 ([src/orchestrator/git_ops.py](src/orchestrator/git_ops.py))
 - **`safe.directory=*`**: サンドボックス内 (`agent` uid=1000) とホスト側 (`root`) でユーザーが異なるため必須
 - **Conventional Commits**: `fix: resolve #N - title` 形式
-- **OpenCode CLI**: `opencode run <prompt>` を非対話モードで実行。全ツール自動承認 (`OPENCODE_PERMISSION` 環境変数)
-- **テスト**: `unittest.mock` (`MagicMock`, `patch`)、Webhook は `TestClient`、CLI は `CliRunner`
+- **OpenCode CLI**: `opencode run <prompt>` を非対話モードで実行。全ツール自動承認 (`OPENCODE_PERMISSION` 環境変数)  ([src/orchestrator/sandbox/agent_runner.py](src/orchestrator/sandbox/agent_runner.py))
+- **サブパッケージ構成**: GitHub 連携は `orchestrator.github.*`、Docker サンドボックスは `orchestrator.sandbox.*` としてインポート
+- **テスト**: `unittest.mock` (`MagicMock`, `patch`)、Webhook は `TestClient`、CLI は `CliRunner`。`@patch` のターゲットパスも新サブパッケージ構成に合わせること (例: `orchestrator.github.issue_monitor.Github`)
 
 ## Security
 

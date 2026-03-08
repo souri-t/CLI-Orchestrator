@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from orchestrator.webhook_server import create_app
+from orchestrator.github.webhook_server import create_app
 
 
 def _make_signature(body: bytes, secret: str) -> str:

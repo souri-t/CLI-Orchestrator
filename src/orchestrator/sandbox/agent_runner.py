@@ -8,13 +8,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from orchestrator.config import AppConfig
-from orchestrator.issue_monitor import IssueTask
+from orchestrator.github.issue_monitor import IssueTask
 from orchestrator.logger import get_logger
-from orchestrator.sandbox import CONTAINER_WORKSPACE, Sandbox
+from orchestrator.sandbox.sandbox import CONTAINER_WORKSPACE, Sandbox
 
 log = get_logger(__name__)
 
-PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+PROMPTS_DIR = Path(__file__).parent.parent.parent.parent / "prompts"
 DEFAULT_SYSTEM_PROMPT = PROMPTS_DIR / "default_system.md"
 
 

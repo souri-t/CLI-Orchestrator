@@ -7,13 +7,13 @@ from __future__ import annotations
 import concurrent.futures
 import threading
 
-from orchestrator.agent_runner import AgentError, AgentRunner
 from orchestrator.config import AppConfig
 from orchestrator.git_ops import GitError, GitOps
-from orchestrator.issue_monitor import IssueMonitor, IssueTask
+from orchestrator.github.issue_monitor import IssueMonitor, IssueTask
+from orchestrator.github.pr_manager import PRManager
 from orchestrator.logger import get_logger
-from orchestrator.pr_manager import PRManager
-from orchestrator.sandbox import SandboxError, SandboxManager, SandboxTimeout
+from orchestrator.sandbox.agent_runner import AgentError, AgentRunner
+from orchestrator.sandbox.sandbox import SandboxError, SandboxManager, SandboxTimeout
 
 log = get_logger(__name__)
 

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrator.config import AppConfig, LabelsConfig
-from orchestrator.issue_monitor import IssueMonitor, IssueTask
+from orchestrator.github.issue_monitor import IssueMonitor, IssueTask
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ class TestIssueTask:
 
 
 class TestIssueMonitor:
-    @patch("orchestrator.issue_monitor.Github")
+    @patch("orchestrator.github.issue_monitor.Github")
     def test_fetch_pending_issues_skips_wip(
         self, mock_github_cls: MagicMock, monitor: IssueMonitor
     ) -> None:
@@ -86,7 +86,7 @@ class TestIssueMonitor:
         result = monitor._fetch_from_repo(mock_repo)
         assert result == []
 
-    @patch("orchestrator.issue_monitor.Github")
+    @patch("orchestrator.github.issue_monitor.Github")
     def test_fetch_pending_issues_returns_task(
         self, mock_github_cls: MagicMock, monitor: IssueMonitor
     ) -> None:

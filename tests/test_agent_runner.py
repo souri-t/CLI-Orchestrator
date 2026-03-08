@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from orchestrator.agent_runner import AgentRunner
+from orchestrator.sandbox.agent_runner import AgentRunner
 from orchestrator.config import AppConfig
-from orchestrator.issue_monitor import IssueTask
+from orchestrator.github.issue_monitor import IssueTask
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ class TestAgentRunner:
         self, runner: AgentRunner, task: IssueTask
     ) -> None:
         """clone 失敗時に AgentError が発生すること。"""
-        from orchestrator.agent_runner import AgentError
+        from orchestrator.sandbox.agent_runner import AgentError
 
         mock_sandbox = MagicMock()
         mock_sandbox.exec.return_value = (1, "fatal: not a git repository")
@@ -91,7 +91,7 @@ class TestAgentRunner:
         self, runner: AgentRunner, task: IssueTask
     ) -> None:
         """変更がない場合に AgentError が発生すること。"""
-        from orchestrator.agent_runner import AgentError
+        from orchestrator.sandbox.agent_runner import AgentError
 
         mock_sandbox = MagicMock()
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from github import Auth, Github, GithubException
 
-from orchestrator.issue_monitor import IssueTask
+from orchestrator.github.issue_monitor import IssueTask
 from orchestrator.logger import get_logger
 
 log = get_logger(__name__)

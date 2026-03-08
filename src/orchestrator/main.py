@@ -339,7 +339,7 @@ def _run_webhook(
     import uvicorn
 
     from orchestrator.config import AppConfig
-    from orchestrator.webhook_server import create_app
+    from orchestrator.github.webhook_server import create_app
 
     config: AppConfig = app_config  # type: ignore[assignment]
     fastapi_app = create_app(orchestrator, webhook_secret)
