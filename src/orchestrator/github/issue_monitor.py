@@ -1,6 +1,6 @@
 """GitHub Issue の監視とラベル遷移を管理するモジュール。
 
-ai-task ラベル付きの Issue を検出し、ラベルを ai-wip に遷移させることで
+ai-task ラベル付きの Issue を検出し、ラベルを ai-running に遷移させることで
 冪等性（同じ Issue の重複処理防止）を担保する。
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ class IssueMonitor:
     def fetch_pending_issues(self) -> list[IssueTask]:
         """全リポジトリから ai-task ラベル付きの未処理 Issue を取得する。
 
-        取得と同時にラベルを ai-wip に変更することで重複処理を防ぐ。
+        取得と同時にラベルを ai-running に変更することで重複処理を防ぐ。
         """
         tasks: list[IssueTask] = []
 
@@ -85,22 +85,22 @@ class IssueMonitor:
         )
 
         for issue in issues:
-            task = self._transition_to_wip(repo, issue)
+            task = self._transition_to_running(repo, issue)
             if task is not None:
                 tasks.append(task)
 
         return tasks
 
-    def _transition_to_wip(self, repo: Repository, issue: Issue) -> IssueTask | None:
-        """Issue のラベルを ai-task → ai-wip に遷移させる。
+    def _transition_to_running(self, repo: Repository, issue: Issue) -> IssueTask | None:
+        """Issue のラベルを ai-task → ai-running に遷移させる。
 
         遷移に成功した場合のみ IssueTask を返す。
-        すでに ai-wip / ai-done / ai-fail の場合はスキップ。
+        すでに ai-running / ai-done / ai-fail の場合はスキップ。
         """
         current_label_names = [lbl.name for lbl in issue.labels]
 
         # 既に処理中または完了済みの場合はスキップ
-        skip_labels = {self._labels.wip, self._labels.done, self._labels.fail}
+        skip_labels = {self._labels.running, self._labels.done, self._labels.fail}
         if skip_labels.intersection(current_label_names):
             return None
 
@@ -109,12 +109,12 @@ class IssueMonitor:
             return None
 
         try:
-            # ラベル遷移: ai-task を削除 → ai-wip を追加
+            # ラベル遷移: ai-task を削除 → ai-running を追加
             issue.remove_from_labels(self._labels.trigger)
-            issue.add_to_labels(self._labels.wip)
+            issue.add_to_labels(self._labels.running)
 
             log.info(
-                "issue_transitioned_to_wip",
+                "issue_transitioned_to_running",
                 repo=repo.full_name,
                 issue=issue.number,
                 title=issue.title,
@@ -124,7 +124,7 @@ class IssueMonitor:
             issue.create_comment(
                 "🤖 **AI Orchestrator** がこの Issue の作業を開始しました。\n\n"
                 f"タスクが完了次第、Draft PR を作成します。\n"
-                f"_ラベル `{self._labels.wip}` が付いている間は処理中です。_"
+                f"_ラベル `{self._labels.running}` が付いている間は処理中です。_"
             )
 
             # コメント一覧を取得
@@ -164,7 +164,7 @@ class IssueMonitor:
         try:
             repo = self._gh.get_repo(repo_full_name)
             issue = repo.get_issue(issue_number)
-            issue.remove_from_labels(self._labels.wip)
+            issue.remove_from_labels(self._labels.running)
             issue.add_to_labels(self._labels.done)
             issue.create_comment(
                 f"✅ **AI Orchestrator** が作業を完了しました！\n\n"
@@ -185,7 +185,7 @@ class IssueMonitor:
         try:
             repo = self._gh.get_repo(repo_full_name)
             issue = repo.get_issue(issue_number)
-            issue.remove_from_labels(self._labels.wip)
+            issue.remove_from_labels(self._labels.running)
             issue.add_to_labels(self._labels.fail)
             issue.create_comment(
                 f"❌ **AI Orchestrator** の処理が失敗しました。\n\n"

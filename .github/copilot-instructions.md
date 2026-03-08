@@ -40,7 +40,7 @@ GitHub Issue → [Polling/Webhook] → Orchestrator.submit_task()
     5. github.IssueMonitor.mark_success/mark_failure()
 ```
 
-- **ラベル駆動ステートマシン**: `ai-task` → `ai-wip` → `ai-done`/`ai-fail` (外部 DB 不要)
+- **ラベル駆動ステートマシン**: `ai-task` → `ai-running` → `ai-done`/`ai-fail` (外部 DB 不要)
 - **コア処理は同期**、Webhook/ヘルスチェックのみ async (FastAPI)
 - **並行制御**: `ThreadPoolExecutor` + `Semaphore` ([src/orchestrator/trigger.py](src/orchestrator/trigger.py))
 - **GITHUB_TOKEN はサンドボックスに渡さない** — push/PR はホスト側のみで実行

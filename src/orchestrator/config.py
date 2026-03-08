@@ -20,7 +20,7 @@ class LabelsConfig(BaseModel):
     """Issue ラベル名の設定。"""
 
     trigger: str = "ai-task"
-    wip: str = "ai-wip"
+    running: str = "ai-running"
     done: str = "ai-done"
     fail: str = "ai-fail"
     pr_generated: str = "ai-generated"

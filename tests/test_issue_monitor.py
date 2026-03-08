@@ -64,13 +64,13 @@ class TestIssueTask:
 
 class TestIssueMonitor:
     @patch("orchestrator.github.issue_monitor.Github")
-    def test_fetch_pending_issues_skips_wip(
+    def test_fetch_pending_issues_skips_running(
         self, mock_github_cls: MagicMock, monitor: IssueMonitor
     ) -> None:
-        """ai-wip ラベルが付いた Issue はスキップされること。"""
+        """ai-running ラベルが付いた Issue はスキップされること。"""
         mock_issue = MagicMock()
-        mock_issue.labels = [MagicMock(name="ai-wip"), MagicMock(name="ai-task")]
-        mock_issue.labels[0].name = "ai-wip"
+        mock_issue.labels = [MagicMock(name="ai-running"), MagicMock(name="ai-task")]
+        mock_issue.labels[0].name = "ai-running"
         mock_issue.labels[1].name = "ai-task"
 
         mock_repo = MagicMock()
@@ -81,7 +81,7 @@ class TestIssueMonitor:
         mock_gh.get_repo.return_value = mock_repo
         mock_github_cls.return_value = mock_gh
 
-        # ai-wip が付いているのでスキップ
+        # ai-running が付いているのでスキップ
         monitor._gh = mock_gh
         result = monitor._fetch_from_repo(mock_repo)
         assert result == []
@@ -116,7 +116,7 @@ class TestIssueMonitor:
         assert result[0].title == "Test Issue"
         # ラベル遷移が呼ばれたことを確認
         mock_issue.remove_from_labels.assert_called_once_with("ai-task")
-        mock_issue.add_to_labels.assert_called_once_with("ai-wip")
+        mock_issue.add_to_labels.assert_called_once_with("ai-running")
 
     def test_mark_success_updates_labels(self, monitor: IssueMonitor) -> None:
         """mark_success が正しくラベルを更新しコメントを投稿すること。"""
@@ -129,7 +129,7 @@ class TestIssueMonitor:
 
         monitor.mark_success("owner/repo", 42, "https://github.com/pr/1", 1)
 
-        mock_issue.remove_from_labels.assert_called_once_with("ai-wip")
+        mock_issue.remove_from_labels.assert_called_once_with("ai-running")
         mock_issue.add_to_labels.assert_called_once_with("ai-done")
         mock_issue.create_comment.assert_called_once()
 
@@ -144,5 +144,5 @@ class TestIssueMonitor:
 
         monitor.mark_failure("owner/repo", 42, "some error")
 
-        mock_issue.remove_from_labels.assert_called_once_with("ai-wip")
+        mock_issue.remove_from_labels.assert_called_once_with("ai-running")
         mock_issue.add_to_labels.assert_called_once_with("ai-fail")

@@ -17,7 +17,7 @@ max_concurrent_tasks: 2
 # ラベル設定
 labels:
   trigger: "ai-task"      # このラベルが付いた Issue を処理対象とする
-  wip: "ai-wip"           # 処理中
+  running: "ai-running"   # 処理中
   done: "ai-done"         # 完了
   fail: "ai-fail"         # 失敗
   pr_generated: "ai-generated"  # 作成した PR に付与するラベル

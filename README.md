@@ -73,7 +73,7 @@ GitHub Issue に `ai-task` ラベルを付けると、GitHub Copilot CLI が Doc
                │                               │                           │
                │  2. poll / Webhook で検出 ──▶ │                           │
                │                               │  3. ラベル遷移             │
-               │◀──────────────────────────── │     ai-task → ai-wip      │
+               │◀──────────────────────────── │  ai-task → ai-running     │
                │  「作業開始」コメント投稿       │                           │
                │                               │  4. コンテナ起動 ─────────▶│
                │                               │     ~/.copilot/ マウント   │ 5. git clone
@@ -86,7 +86,7 @@ GitHub Issue に `ai-task` ラベルを付けると、GitHub Copilot CLI が Doc
                │                               │     (GITHUB_TOKEN 使用)   │
                │                               │ 11. Draft PR 作成         │
                │◀──────────────────────────── │                           │
-               │  ai-wip → ai-done             │                           │
+               │  ai-running → ai-done         │                           │
                │  PR リンクコメント投稿         │                           │
 ```
 
@@ -97,8 +97,8 @@ GitHub Issue に `ai-task` ラベルを付けると、GitHub Copilot CLI が Doc
         │
         ▼
    ┌─────────┐    Orchestrator 検出     ┌─────────┐
-   │ ai-task │ ──────────────────────▶ │ ai-wip  │
-   └─────────┘                         └────┬────┘
+   │ ai-task │ ──────────────────────▶ │ai-running│
+   └─────────┘                         └────┬─────┘
                                             │
                         ┌───────────────────┤
                         │                   │
@@ -140,7 +140,7 @@ Issue のラベルが状態管理を兼ねます：
 | ラベル | 意味 |
 |---|---|
 | `ai-task` | 処理対象（このラベルを付けると処理開始） |
-| `ai-wip` | 処理中 |
+| `ai-running` | 処理中 |
 | `ai-done` | 完了（Draft PR 作成済み） |
 | `ai-fail` | 失敗（コメントにエラー内容を記載） |
 
@@ -236,7 +236,7 @@ Expected: proper validation error message.
 ```
 
 Orchestrator が検出すると：
-1. ラベルが `ai-task` → `ai-wip` に変わる
+1. ラベルが `ai-task` → `ai-running` に変わる
 2. Issue に「🤖 作業を開始しました」コメントが投稿される
 3. Docker サンドボックスで `copilot --autopilot` が実行される
 4. 変更がブランチ `ai/issue-{number}-{slug}` にプッシュされる
