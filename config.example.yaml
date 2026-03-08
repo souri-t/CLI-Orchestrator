@@ -60,7 +60,7 @@ agent:
 
   # OpenCode CLI の設定 (use: "opencode" 時に有効)
   opencode:
-    model: ""  # 空の場合は .opencode.json のデフォルトモデルを使用
+    model: "gpt-4.1"  # 空の場合は .opencode.json のデフォルトモデルを使用
     # モデル指定例:
     #   Anthropic:  "anthropic/claude-sonnet-4-5"
     #   OpenAI:     "openai/gpt-4o"

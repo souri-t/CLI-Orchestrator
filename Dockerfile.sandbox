@@ -37,12 +37,11 @@ RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path && \
 
 # GitHub Copilot CLI をビルド時にインストール
 # Node.js LTS をまずインストールしてから npm で @github/copilot の CLI をインストール
+# npm install -g が自動で /usr/local/bin/copilot を作成するため ln -sf は不要
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/* && \
-    npm install -g @github/copilot && \
-    ln -sf "$(npm root -g)/@github/copilot/bin/copilot" /usr/local/bin/copilot && \
-    chmod 755 /usr/local/bin/copilot
+    npm install -g @github/copilot
 
 # 非 root ユーザーを作成
 RUN useradd -m -u 1000 -s /bin/bash agent && \
