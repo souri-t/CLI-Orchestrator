@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-def create_app(orchestrator: "Orchestrator", webhook_secret: str) -> FastAPI:
+def create_app(orchestrator: Orchestrator, webhook_secret: str) -> FastAPI:
     """FastAPI アプリケーションを生成する。
 
     Args:

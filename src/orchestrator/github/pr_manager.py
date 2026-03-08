@@ -6,6 +6,7 @@ AI が生成したコードは必ず Draft PR として作成し、
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 
 from github import Auth, Github, GithubException
 
@@ -32,7 +33,7 @@ PR_BODY_TEMPLATE = """\
 > ⚠️ **注意**: このPRはAIが生成したコードを含みます。
 > マージ前に必ず内容を確認してください。
 >
-> - 使用エージェント: OpenCode
+> - 使用エージェント: {agent_name}
 > - 生成日時: {generated_at}
 """
 
@@ -59,6 +60,7 @@ class PRManager:
         base_branch: str = "main",
         change_summary: str = "(AI による自動生成)",
         draft: bool = True,
+        agent_name: str = "OpenCode",
     ) -> PRResult:
         """Pull Request を作成する。
 
@@ -75,7 +77,7 @@ class PRManager:
         Raises:
             GithubException: PR 作成失敗時
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         repo = self._gh.get_repo(task.repo_full_name)
 
@@ -89,7 +91,8 @@ class PRManager:
         pr_body = PR_BODY_TEMPLATE.format(
             issue_number=task.issue_number,
             change_summary=change_summary,
-            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+            agent_name=agent_name,
         )
 
         try:

@@ -1,7 +1,10 @@
-"""OpenCode CLI をサンドボックス内で実行するモジュール。
+"""AI エージェント CLI をサンドボックス内で実行するモジュール。
 
-Issue の内容からプロンプトを構築し、
-`opencode -p` コマンドでコーディングを実行する。
+Issue の内容からプロンプトを構築し、設定されたエージェント CLIでコーディングを実行する。
+
+対応エージェント:
+  - opencode: OpenCode CLI (`opencode run <prompt>`)
+  - copilot:  GitHub Copilot CLI (`copilot -p <prompt> --autopilot`)
 """
 from __future__ import annotations
 
@@ -23,7 +26,7 @@ class AgentError(Exception):
 
 
 class AgentRunner:
-    """サンドボックス内で OpenCode CLI を実行する。"""
+    """サンドボックス内で AI エージェント CLI を実行する。"""
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
@@ -48,6 +51,7 @@ class AgentRunner:
             "agent_start",
             task=f"{task.repo_full_name}#{task.issue_number}",
             branch=branch_name,
+            agent=self._config.agent.use,
         )
 
         # 1. リポジトリ clone
@@ -56,8 +60,8 @@ class AgentRunner:
         # 2. ブランチ作成
         self._create_branch(sandbox, branch_name)
 
-        # 3. OpenCode CLI 実行
-        self._run_opencode(sandbox, task)
+        # 3. エージェント CLI 実行 (設定されたエージェントに応じて切り替え)
+        self._run_agent(sandbox, task)
 
         # 4. 変更差分を取得
         diff = self._get_diff(sandbox)
@@ -67,7 +71,7 @@ class AgentRunner:
                 "no_changes",
                 task=f"{task.repo_full_name}#{task.issue_number}",
             )
-            raise AgentError("OpenCode CLI がファイルに変更を加えませんでした。")
+            raise AgentError(f"{self._agent_display_name} がファイルに変更を加えませんでした。")
 
         log.info(
             "agent_success",
@@ -99,30 +103,42 @@ class AgentRunner:
             raise AgentError(f"ブランチ作成失敗 ({branch_name}):\n{output}")
         log.debug("branch_created", branch=branch_name)
 
+    @property
+    def _agent_display_name(self) -> str:
+        """エージェントの表示名を返す。"""
+        return {"opencode": "OpenCode CLI", "copilot": "GitHub Copilot CLI"}.get(
+            self._config.agent.use, self._config.agent.use
+        )
+
+    def _run_agent(self, sandbox: Sandbox, task: IssueTask) -> None:
+        """設定されたエージェント CLI にディスパッチする。"""
+        if self._config.agent.use == "copilot":
+            self._run_copilot(sandbox, task)
+        else:
+            self._run_opencode(sandbox, task)
+
     def _run_opencode(self, sandbox: Sandbox, task: IssueTask) -> None:
         """opencode CLI を非対話モードで実行する。"""
-        import os
-
         prompt = self._build_prompt(task)
-        opencode_cfg = self._config.opencode
+        opencode_cfg = self._config.agent.opencode
 
         # `opencode run` が非対話モードの正しいコマンド
         cmd = ["opencode", "run", prompt]
         if opencode_cfg.model:
             cmd += ["--model", opencode_cfg.model]
 
-        # API キーを環境変数から取得してコンテナに渡す
-        api_key_vars = [
-            "ANTHROPIC_API_KEY",
-            "ANTHROPIC_AUTH_TOKEN",
-            "OPENAI_API_KEY",
-            "OPENAI_ORG_ID",
-            "GOOGLE_API_KEY",
-            "OPENROUTER_API_KEY",
-        ]
+        # API キーを config.yaml の agent.opencode セクションから取得してコンテナに渡す
+        creds = self._config.agent.opencode
         env: dict[str, str] = {}
-        for key in api_key_vars:
-            if val := os.environ.get(key):
+        for key, val in [
+            ("ANTHROPIC_API_KEY", creds.anthropic_api_key),
+            ("ANTHROPIC_AUTH_TOKEN", creds.anthropic_auth_token),
+            ("OPENAI_API_KEY", creds.openai_api_key),
+            ("OPENAI_ORG_ID", creds.openai_org_id),
+            ("GOOGLE_API_KEY", creds.google_api_key),
+            ("OPENROUTER_API_KEY", creds.openrouter_api_key),
+        ]:
+            if val:
                 env[key] = val
 
         # 全ツールを自動承認 (コンテナはサンドボックス内なので安全)
@@ -161,6 +177,69 @@ class AgentRunner:
             if pat in output:
                 raise AgentError(
                     f"OpenCode CLI がエラーで終了しました。\n出力:\n{output[-2000:]}"
+                )
+
+    def _run_copilot(self, sandbox: Sandbox, task: IssueTask) -> None:
+        """GitHub Copilot CLI を非対話モードで実行する。"""
+        prompt = self._build_prompt(task)
+        copilot_cfg = self._config.agent.copilot
+
+        cmd = [
+            "copilot",
+            "-p", prompt,
+            "--autopilot",
+            "--yolo",
+            "--no-ask-user",
+            "--max-autopilot-continues", str(copilot_cfg.max_autopilot_continues),
+            "--deny-tool", "shell(git push)",  # push はホスト側で実行するため禁止
+        ]
+        if copilot_cfg.model:
+            cmd += ["--model", copilot_cfg.model]
+
+        # Copilot の認証は COPILOT_GITHUB_TOKEN のみ。
+        # ホストの copilot login の OAuth トークンはキーチェーン保存のため環境変数で渡せないので、
+        # GitHub Settings で発行した Fine-grained PAT ("Copilot Requests" 権限付き) を使用する。
+        env: dict[str, str] = {}
+        if token := self._config.agent.copilot.copilot_github_token:
+            env["COPILOT_GITHUB_TOKEN"] = token
+
+        env["NO_COLOR"] = "1"
+        env["TERM"] = "dumb"
+
+        log.info(
+            "copilot_running",
+            task=f"{task.repo_full_name}#{task.issue_number}",
+            model=copilot_cfg.model or "(copilot default)",
+            max_continues=copilot_cfg.max_autopilot_continues,
+        )
+
+        exit_code, output = sandbox.exec(cmd, env=env)
+
+        log.info(
+            "copilot_exit",
+            task=f"{task.repo_full_name}#{task.issue_number}",
+            exit_code=exit_code,
+            output_tail=output[-2000:],
+        )
+        if exit_code != 0:
+            raise AgentError(
+                f"GitHub Copilot CLI が exit code {exit_code} で終了しました。\n"
+                f"出力:\n{output[-2000:]}"
+            )
+        # exit_code=0 でも出力にエラーを含む場合を検知
+        _error_patterns = [
+            "AuthenticationError",
+            "authentication failed",
+            "token",
+            "permission",
+            "Unauthorized",
+            "Bad credentials",
+        ]
+        output_lower = output.lower()
+        for pat in _error_patterns:
+            if pat.lower() in output_lower and exit_code != 0:
+                raise AgentError(
+                    f"GitHub Copilot CLI が認証エラーで終了しました。\n出力:\n{output[-2000:]}"
                 )
 
     def _get_diff(self, sandbox: Sandbox) -> str:

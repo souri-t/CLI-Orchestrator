@@ -75,10 +75,12 @@ class TaskPipeline:
                 )
 
             # 3. PR 作成 (サンドボックスの外で実行)
+            _agent_name_map = {"opencode": "OpenCode", "copilot": "GitHub Copilot CLI"}
             pr_result = self._pr_manager.create_draft_pr(
                 task=task,
                 branch_name=branch_name,
                 draft=self._config.pr.draft,
+                agent_name=_agent_name_map.get(self._config.agent.use, self._config.agent.use),
             )
 
             # 4. Issue を ai-done にマーク
@@ -96,7 +98,7 @@ class TaskPipeline:
                 pr=pr_result.pr_number,
             )
 
-        except SandboxTimeout as e:
+        except SandboxTimeout:
             error_msg = f"タイムアウト ({self._config.sandbox.timeout_sec}秒) で処理を中断しました。"
             log.error("task_timeout", repo=task.repo_full_name, issue=task.issue_number)
             self._issue_monitor.mark_failure(task.repo_full_name, task.issue_number, error_msg)

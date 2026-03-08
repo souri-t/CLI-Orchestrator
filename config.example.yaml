@@ -31,7 +31,7 @@ webhook:
   host: "0.0.0.0"
   port: 8080
   path: "/webhook"
-  # secret は環境変数 WEBHOOK_SECRET で設定してください
+  # secret は credentials.webhook_secret で設定してください
 
 # Docker サンドボックスの設定
 sandbox:
@@ -51,24 +51,58 @@ sandbox:
     - "api.gemini.com"
     - "generativelanguage.googleapis.com"
     - "openrouter.ai"  # OpenRouter 使用時に追加
+    - "copilot-proxy.githubusercontent.com"  # GitHub Copilot CLI 使用時に必須
+
+# エージェント設定
+agent:
+  # 使用するエージェント: "opencode" または "copilot"
+  use: "opencode"
+
+  # OpenCode CLI の設定 (use: "opencode" 時に有効)
+  opencode:
+    model: ""  # 空の場合は .opencode.json のデフォルトモデルを使用
+    # モデル指定例:
+    #   Anthropic:  "anthropic/claude-sonnet-4-5"
+    #   OpenAI:     "openai/gpt-4o"
+    #   Google:     "google/gemini-2.0-flash"
+    #   OpenRouter: "openrouter/anthropic/claude-sonnet-4-5"
+
+    # 使用する AI プロバイダの API キー (いずれか1つ必須)
+    anthropic_api_key: ""      # sk-ant-api03-...
+    anthropic_auth_token: ""   # anthropic_api_key の代替
+    openai_api_key: ""         # sk-...
+    openai_org_id: ""          # org-... (オプション)
+    google_api_key: ""         # AIza...
+    openrouter_api_key: ""     # sk-or-v1-...
+
+  # GitHub Copilot CLI の設定 (use: "copilot" 時に有効)
+  # 認証: GitHub Settings で Fine-grained PAT を発行し、
+  #          "Copilot Requests" 権限を付与して copilot_github_token に設定
+  # 注意: Classic PAT (ghp_) は不可。Fine-grained PAT (github_pat_) のみ対応
+  # 注意: `copilot login` の OAuth トークンは不可 (キーチェーン保存で環境変数で渡せない)
+  copilot:
+    model: ""  # 空の場合は Copilot のデフォルトモデル (Claude Sonnet 4.5) を使用
+    max_autopilot_continues: 20  # 最大自律継続ステップ数 (暴走防止)
+    copilot_github_token: ""   # github_pat_...
 
 # PR の設定
 pr:
   draft: true  # true: Draft PR として作成 (デフォルト), false: 通常の PR として作成
   # base_branch: "main"  # 省略時はリポジトリのデフォルトブランチを使用
 
-# OpenCode CLI の設定
-opencode:
-  model: ""  # 空の場合は .opencode.json のデフォルトモデルを使用
-  # モデル指定例:
-  #   Anthropic: "anthropic/claude-sonnet-4-5"
-  #   OpenAI:    "openai/gpt-4o"
-  #   Google:    "google/gemini-2.0-flash"
-  #   OpenRouter: "openrouter/anthropic/claude-sonnet-4-5"
-  #              "openrouter/google/gemini-2.0-flash-001"
-  #              "openrouter/openai/gpt-4o"
-
 # 認証ファイルのパス (コンテナにマウントされる)
 auth:
   opencode_dir: "~/.opencode"
   opencode_config_dir: "~/.config/opencode"
+
+# ============================================================
+# 認証情報 (.env は廃止済み。このセクションに統合)
+# config.yaml は .gitignore 対象のため、シークレットを直接記載できます
+# ============================================================
+credentials:
+  # GitHub 連携 (必須)
+  # Fine-grained PAT または Classic PAT (repo + issues 権限が必要)
+  github_token: "ghp_your_github_token"
+
+  # Webhook シークレット (webhook モード時に必須。polling モードでは不要)
+  webhook_secret: ""

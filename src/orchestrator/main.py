@@ -17,7 +17,7 @@ from typing import NamedTuple
 import click
 from github import Auth, Github, GithubException
 
-from orchestrator.config import load_config, load_settings
+from orchestrator.config import AppConfig, load_config
 from orchestrator.logger import get_logger, setup_logging
 from orchestrator.trigger import Orchestrator
 
@@ -35,14 +35,28 @@ class _KeyResult(NamedTuple):
     message: str
 
 
-def _check_api_keys() -> list[_KeyResult]:
-    """環境変数に設定された AI API キーを実際にリクエストして検証する。"""
+def _check_api_keys(app_config: AppConfig | None = None) -> list[_KeyResult]:
+    """AI API キーを実際にリクエストして検証する。
+
+    app_config が指定された場合は config.yaml の agent セクションから読み込む。
+    省略された場合は環境変数から読み込む (後方互换・テスト用)。
+    """
     import httpx
+
+    oc = app_config.agent.opencode if app_config else None
+    cp = app_config.agent.copilot if app_config else None
+
+    def _get(env_var: str, cfg_val: str) -> str:
+        """app_config が渡されていればその値を、なければ環境変数を返す。"""
+        if app_config is not None:
+            return cfg_val
+        return os.environ.get(env_var, "")
 
     results: list[_KeyResult] = []
 
     # --- Anthropic ---
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    anthropic_key = _get("ANTHROPIC_API_KEY", oc.anthropic_api_key if oc else "") or \
+        _get("ANTHROPIC_AUTH_TOKEN", oc.anthropic_auth_token if oc else "")
     if anthropic_key:
         try:
             r = httpx.get(
@@ -65,7 +79,7 @@ def _check_api_keys() -> list[_KeyResult]:
         results.append(_KeyResult("Anthropic", "ANTHROPIC_API_KEY", False, "未設定"))
 
     # --- OpenAI ---
-    openai_key = os.environ.get("OPENAI_API_KEY")
+    openai_key = _get("OPENAI_API_KEY", oc.openai_api_key if oc else "")
     if openai_key:
         try:
             r = httpx.get(
@@ -85,7 +99,7 @@ def _check_api_keys() -> list[_KeyResult]:
         results.append(_KeyResult("OpenAI", "OPENAI_API_KEY", False, "未設定"))
 
     # --- Google ---
-    google_key = os.environ.get("GOOGLE_API_KEY")
+    google_key = _get("GOOGLE_API_KEY", oc.google_api_key if oc else "")
     if google_key:
         try:
             r = httpx.get(
@@ -104,7 +118,7 @@ def _check_api_keys() -> list[_KeyResult]:
         results.append(_KeyResult("Google", "GOOGLE_API_KEY", False, "未設定"))
 
     # --- OpenRouter ---
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    openrouter_key = _get("OPENROUTER_API_KEY", oc.openrouter_api_key if oc else "")
     if openrouter_key:
         try:
             r = httpx.get(
@@ -122,6 +136,55 @@ def _check_api_keys() -> list[_KeyResult]:
             results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, f"接続エラー: {e}"))
     else:
         results.append(_KeyResult("OpenRouter", "OPENROUTER_API_KEY", False, "未設定"))
+
+    # --- GitHub Copilot (agent: "copilot" 時に必要) ---
+    copilot_token = _get("COPILOT_GITHUB_TOKEN", cp.copilot_github_token if cp else "")
+    if copilot_token:
+        try:
+            r = httpx.get(
+                "https://api.github.com/user",
+                headers={
+                    "Authorization": f"Bearer {copilot_token}",
+                    "Accept": "application/vnd.github+json",
+                },
+                timeout=10.0,
+            )
+            if r.status_code == 200:
+                login = r.json().get("login", "?")
+                results.append(
+                    _KeyResult("GitHub Copilot", "COPILOT_GITHUB_TOKEN", True, f"OK (@{login})")
+                )
+            elif r.status_code == 401:
+                results.append(
+                    _KeyResult(
+                        "GitHub Copilot",
+                        "COPILOT_GITHUB_TOKEN",
+                        False,
+                        "認証失敗 (無効なトークン)",
+                    )
+                )
+            else:
+                results.append(
+                    _KeyResult(
+                        "GitHub Copilot",
+                        "COPILOT_GITHUB_TOKEN",
+                        False,
+                        f"HTTP {r.status_code}",
+                    )
+                )
+        except Exception as e:
+            results.append(
+                _KeyResult("GitHub Copilot", "COPILOT_GITHUB_TOKEN", False, f"接続エラー: {e}")
+            )
+    else:
+        results.append(
+            _KeyResult(
+                "GitHub Copilot",
+                "COPILOT_GITHUB_TOKEN",
+                False,
+                "未設定 (agent: copilot 時に必須)",
+            )
+        )
 
     return results
 
@@ -152,22 +215,33 @@ def run(ctx: click.Context) -> None:
     """
     config_path: str = ctx.obj["config_path"]
     app_config = load_config(config_path)
-    settings = load_settings()
 
-    if not settings.github_token:
-        click.echo("❌ GITHUB_TOKEN が設定されていません。", err=True)
+    if not app_config.credentials.github_token:
+        click.echo("❌ GITHUB_TOKEN が設定されていません。config.yaml の credentials.github_token を設定してください。", err=True)
         sys.exit(1)
 
     if not app_config.repositories:
         click.echo("❌ config.yaml に repositories が設定されていません。", err=True)
         sys.exit(1)
 
-    # AI API キーが一つも設定されていない場合は警告
-    _api_key_vars = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GOOGLE_API_KEY", "OPENROUTER_API_KEY"]
-    if not any(os.environ.get(k) for k in _api_key_vars):
+    # AI API キー / Copilot トークンのチェック
+    oc = app_config.agent.opencode
+    if app_config.agent.use == "copilot":
+        if not app_config.agent.copilot.copilot_github_token:
+            click.echo(
+                "⚠️  copilot_github_token が未設定です。"
+                " config.yaml の agent.copilot.copilot_github_token に"
+                " Fine-grained PAT (\"Copilot Requests\" 権限付き) を設定してください。",
+                err=True,
+            )
+    elif not any([
+        oc.anthropic_api_key, oc.anthropic_auth_token,
+        oc.openai_api_key, oc.google_api_key, oc.openrouter_api_key,
+    ]):
         click.echo(
             "⚠️  AI API キーが未設定です。"
-            " .env に ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY のいずれかを設定してください。",
+            " config.yaml の agent.opencode セクションに"
+            " anthropic_api_key / openai_api_key / google_api_key のいずれかを設定してください。",
             err=True,
         )
 
@@ -178,12 +252,12 @@ def run(ctx: click.Context) -> None:
         max_concurrent=app_config.max_concurrent_tasks,
     )
 
-    orchestrator = Orchestrator(config=app_config, github_token=settings.github_token)
+    orchestrator = Orchestrator(config=app_config, github_token=app_config.credentials.github_token)
 
     if app_config.mode == "polling":
         _run_polling(orchestrator, app_config.polling.interval_sec)
     elif app_config.mode == "webhook":
-        _run_webhook(orchestrator, app_config, settings.webhook_secret)
+        _run_webhook(orchestrator, app_config, app_config.credentials.webhook_secret)
     else:
         click.echo(f"❌ 不明なモード: {app_config.mode}", err=True)
         sys.exit(1)
@@ -195,13 +269,12 @@ def run_once(ctx: click.Context) -> None:
     """1回だけポーリングを実行して終了する (デバッグ・テスト用)。"""
     config_path: str = ctx.obj["config_path"]
     app_config = load_config(config_path)
-    settings = load_settings()
 
-    if not settings.github_token:
-        click.echo("❌ GITHUB_TOKEN が設定されていません。", err=True)
+    if not app_config.credentials.github_token:
+        click.echo("❌ GITHUB_TOKEN が設定されていません。config.yaml の credentials.github_token を設定してください。", err=True)
         sys.exit(1)
 
-    orchestrator = Orchestrator(config=app_config, github_token=settings.github_token)
+    orchestrator = Orchestrator(config=app_config, github_token=app_config.credentials.github_token)
 
     log.info("run_once_start", repos=app_config.repositories)
     count = orchestrator.poll_once()
@@ -213,10 +286,13 @@ def run_once(ctx: click.Context) -> None:
 
 
 @cli.command("check-keys")
-def check_keys() -> None:
-    """AI API キー（Anthropic / OpenAI / Google）の有効性を実際に検証する。"""
-    click.echo("=== AI API キー ヘルスチェック ===\n")
-    results = _check_api_keys()
+@click.pass_context
+def check_keys(ctx: click.Context) -> None:
+    """AI API キーおよび Copilot トークンの有効性を実際に検証する。"""
+    config_path: str = ctx.obj["config_path"]
+    app_config = load_config(config_path)
+    click.echo("=== AI API キー / Copilot トークン ヘルスチェック ===\n")
+    results = _check_api_keys(app_config)
     all_ok = False
     for r in results:
         icon = "✅" if r.ok else "❌"
@@ -227,7 +303,7 @@ def check_keys() -> None:
     if all_ok:
         click.echo("✅ 少なくとも1つのプロバイダのキーが有効です。")
     else:
-        click.echo("❌ 有効な API キーがありません。.env にキーを設定してください。")
+        click.echo("❌ 有効な API キーがありません。config.yaml の credentials セクションにキーを設定してください。")
         sys.exit(1)
 
 
@@ -237,7 +313,6 @@ def status(ctx: click.Context) -> None:
     """設定を確認し、GitHub API への接続をテストする。"""
     config_path: str = ctx.obj["config_path"]
     app_config = load_config(config_path)
-    settings = load_settings()
 
     click.echo("=== Orchestrator Status ===\n")
 
@@ -266,12 +341,12 @@ def status(ctx: click.Context) -> None:
 
     # GitHub API 接続テスト
     click.echo("\n--- GitHub API ---")
-    if not settings.github_token:
-        click.echo("❌ GITHUB_TOKEN が設定されていません。")
+    if not app_config.credentials.github_token:
+        click.echo("❌ GITHUB_TOKEN が設定されていません。config.yaml の credentials.github_token を設定してください。")
         return
 
     try:
-        gh = Github(auth=Auth.Token(settings.github_token))
+        gh = Github(auth=Auth.Token(app_config.credentials.github_token))
         user = gh.get_user()
         click.echo(f"✅ 認証成功: @{user.login}")
 
@@ -287,7 +362,7 @@ def status(ctx: click.Context) -> None:
     # AI API キーチェック
     click.echo("\n--- AI API キー ---")
     click.echo("(各プロバイダの API エンドポイントに接続して検証します...)")
-    key_results = _check_api_keys()
+    key_results = _check_api_keys(app_config)
     for r in key_results:
         icon = "✅" if r.ok else ("⚠️ " if r.message == "未設定" else "❌")
         click.echo(f"  {icon} {r.provider:<12} ({r.env_var}): {r.message}")

@@ -22,17 +22,9 @@ services:
       - /tmp/orchestrator-work:/tmp/orchestrator-work
 
     environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      # 認証情報はすべて config.yaml の credentials セクションで管理します
+      # 環境変数での上書きが必要な場合のみここに記述してください
       - CONFIG_FILE=/app/config.yaml
-      # OpenCode 用 API キー (どちらか使用するものを .env に設定)
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_ORG_ID=${OPENAI_ORG_ID:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      # OpenRouter (openrouter/<model> 形式でモデル指定)
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
 
     # webhook モードの場合はポートを開放 (polling モードでは不要)
     ports:

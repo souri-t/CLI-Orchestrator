@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from orchestrator.config import AppConfig, LabelsConfig
+from orchestrator.config import AppConfig
 from orchestrator.github.issue_monitor import IssueMonitor, IssueTask
 
 
